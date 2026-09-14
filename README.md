@@ -1,6 +1,6 @@
 # FieldServiceBench
 
-A practice company for testing AI dispatchers.
+A benchmark for AI agents that do field-service dispatch work.
 
 FieldServiceBench is a made-up commercial HVAC service company, **Apex Climate
 Services**, with everything a real one has: customers, buildings, rooftop units
@@ -34,6 +34,36 @@ these ten requests are built around.
 Every request has one right answer and several wrong ones that look right. The
 company's systems will let the agent make the wrong call, the same way real
 software would. Only the grader knows the difference.
+
+## What makes it a benchmark
+
+This is not a demo environment. It is a benchmark: a fixed, repeatable test
+that gives every agent the same company, the same ten requests, and the same
+grader, so results can be compared across agents and across versions of the
+same agent.
+
+- **Domain-specific.** General agent tests check whether an agent can use
+  tools. This one checks whether it handles the things that go wrong in field
+  service specifically: superseded bulletins and price books, certifications
+  that lapse, look-alike sites and part numbers, stock that shows on hand but
+  isn't available, approvals that cover one option and not another. An agent
+  that passes a generic tool-use test can still fail every one of these.
+- **Fixed and repeatable.** Same company, same frozen calendar date, same
+  requests, every run. The same sequence of agent actions produces
+  byte-identical results, so a score means the same thing today as it does
+  next year.
+- **Graded automatically, with no judgment calls.** A script grades against the
+  actual state of the company's records and the log of what the agent did.
+  There are no human raters and no AI judge, so the score does not depend on
+  who runs it.
+- **Proven fair before use.** The package includes the correct answer and six
+  deliberately wrong approaches for every request. The correct answer scores
+  100 and every wrong approach scores less. Running `qualify.py` proves this on
+  your own machine.
+- **Built to extend.** The company data, the requests, and the grader are
+  separate pieces. The same engine was used to build a second benchmark in a
+  different industry, agricultural field trials, by writing new records and
+  requests only.
 
 ## What the agent has to do
 
