@@ -1,134 +1,185 @@
-# FieldServiceBench-10
+# FieldServiceBench
 
-A small, fully deterministic, **clean-room** agent benchmark in the style of
-the "world + tools + oracle + verifier" pattern: a fictional commercial-HVAC
-field-service company (*Apex Climate Services*) modeled in SQLite, a
-provider-shaped JSON tool server (stdlib `http.server` only), 10 hand-authored
-employee-request tasks, a reference oracle, a deterministic no-LLM verifier,
-and 5 adversarial controls + a mutation-omission probe as mechanical plan
-transforms.
+A practice company for testing AI dispatchers.
 
-- **Zero dependencies**: Python 3.12 standard library only.
-- **Deterministic**: fixed simulation clock (`config('now') = 2026-03-02`),
-  counter-generated ids, no wall-clock or RNG anywhere; replays are
-  byte-identical.
-- **Self-contained**: world, tasks, oracle, verifier, controls, qualification
-  gate, and Harbor packaging in one tree.
+FieldServiceBench is a made-up commercial HVAC service company, **Apex Climate
+Services**, with everything a real one has: customers, buildings, rooftop units
+and air handlers, technicians with certifications and schedules, work orders, a
+parts room, a price book, customer approvals, an inbox, and a binder of service
+bulletins. It comes with ten requests of the kind that land on a dispatcher's
+desk every day, and an automatic grader that checks whether each job got done
+right.
 
-## Layout
+You point an AI agent at the company, hand it a request, and find out whether it
+did what a good dispatcher would have done.
 
-```
-schema.sql    world schema (14 tables)
-seed.py       deterministic world builder (noise rows + 10 task clusters)
-tasks.py      10 scenario spines + decision specs; derives prompts, gold
-              answers (Decimal math), oracle plans, verifier contracts
-server.py     tool server: 25 tools (18 read, 7 write), business-rule
-              rejections, JSONL trace of every call
-runner.py     seed -> serve (ephemeral localhost port) -> run plan -> artifacts
-oracle.py     replays a task's reference plan through the real server
-verify.py     deterministic verifier (trace + state + containment + answer)
-controls.py   noop / shortcut / state-only / wrong-evidence / wrong-target
-              (+ omission probe) as mechanical transforms of the oracle plan
-qualify.py    runs oracle twice + all controls on all 10 tasks; exit != 0
-              unless every oracle is strict-100 and every control < 100
-harbor/       Harbor-format packaging for 2 tasks + generator script
-```
+## Who this is for
 
-## The world
+- **Service companies** looking at AI tools for dispatch, quoting, or parts, who
+  want a fair test before letting one touch the real schedule.
+- **People building those tools**, who need a repeatable way to check whether
+  the agent actually reads the bulletin before it books the truck.
 
-Tables: `customers, sites, assets, technicians, work_orders, parts_inventory,
-reservations, price_book, approvals, schedule, email_messages, documents,
-quotes, config, counters`. The evidence room deliberately contains current vs
-superseded revisions (documents, price book), decoys (similarly named sites,
-look-alike parts and units), quarantined stock, expired tech certifications,
-and approvals scoped to one work order with a max amount and an allowed
-option. **Gold is never precomputed in any agent-visible artifact** — it lives
-only in the verifier contract, derived from the seed by pure functions.
+You don't need HVAC experience to run it, and you don't need AI experience to
+read the results.
 
-Tools (25): `list/get` for customers, sites, assets, technicians, work orders;
-`query_parts`, `get_price_book`, `list_approvals`, `get_schedule`,
-`list_emails`, `list_documents`, `get_document`, `get_quote`; writes:
-`transition_work_order`, `reserve_parts`, `book_schedule`, `create_quote`,
-`update_quote`, `draft_email`, `submit_answer`. Writes are validated at write
-time with deterministic error codes (`INVALID_STATE`, `CERT_EXPIRED`,
-`TIME_CONFLICT`, `NO_APPROVAL`, `APPROVAL_SCOPE`, `APPROVAL_EXCEEDED`,
-`INSUFFICIENT_STOCK`, `NOT_FOUND`, ...). The server enforces **business rules,
-never gold** — a schema-valid, rule-compliant but non-gold write is accepted.
+## Why it exists
 
-## The 10 tasks
+A demo shows an agent booking a visit. It doesn't show whether the agent
+noticed that the tech's EPA card expired last month, that the price list it
+used was replaced in February, or that "Riverside Place" is not "Riverside
+Plaza." Those are the mistakes that cost real money, and they are exactly what
+these ten requests are built around.
 
-| task | archetype | core trap(s) |
-|------|-----------|--------------|
-| FSB-01 | commit repair visit | expired cert on the early tech; approval covers standard only |
-| FSB-02 | commit repair visit | superseded part price; overtime exceeds cap |
-| FSB-03 | commit repair visit | primary part fully quarantined; alternate only in current bulletin |
-| FSB-04 | commit repair visit | decoy look-alike site/unit; blackout window; expired cert |
-| FSB-05 | quote | superseded price book revision is cheaper |
-| FSB-06 | quote | customer prefers OEM but approval cap only fits reman |
-| FSB-07 | quote | labor hours changed in current bulletin revision |
-| FSB-08 | reserve parts | on-hand hides reserved+quarantined units |
-| FSB-09 | reserve parts | similarly named legacy valve is incompatible per current bulletin |
-| FSB-10 | reserve parts | superseded PM standard says half the quantity; existing reservations |
+Every request has one right answer and several wrong ones that look right. The
+company's systems will let the agent make the wrong call, the same way real
+software would. Only the grader knows the difference.
 
-Each task requires evidence across 3+ systems (email, work orders, documents,
-price book, inventory, approvals, schedule), reconciling current vs superseded
-revisions, comparing 2–3 options of which exactly one is authorized+optimal,
-executing **exactly one authorized mutation**, and submitting exact answer
-fields via `submit_answer`.
+## What the agent has to do
 
-## Verifier (deterministic, fail-closed)
+Each request is an email or a call that a dispatch coordinator would handle.
+The agent has to:
 
-Weighted milestones summing to 100; strict pass iff score == 100.0;
-proportional partial credit per milestone:
+1. Read the request.
+2. Look things up: the work order, the unit, the current service bulletin, the
+   price book, stock on hand, the customer's approval, the techs' schedules and
+   certifications.
+3. Sort out what is current from what is out of date.
+4. Do exactly one thing: book the visit, build the quote, or reserve the parts.
+5. Check that it went through.
+6. Report back the specific details the customer asked for.
 
-- **gating (20)** — required evidence reads before the first write, matched by
-  **exact tool+args** (documented choice; readback uses semantic matching).
-- **clean_writes (10)** — zero rejected write calls (incl. `submit_answer`).
-- **state (25)** — exact expected values via SQL against the final DB.
-- **containment (15)** — immutable tables row-identical AND every changed row
-  of a mutable table inside the task allow-list; auto-fails on any rejected
-  write.
-- **readback (10)** — a read after the successful mutation whose response
-  contains the mutated record's id.
-- **answer (20)** — last `submit_answer` fields vs gold; normalization per
-  field type (str: strip+casefold, int/decimal: `Decimal` equality, date:
-  exact ISO).
+## The ten requests
 
-## Run it
+| # | The request | What a careless dispatcher gets wrong |
+|---|---|---|
+| 1 | Blue Harbor Properties: RTU-7 is down at Riverside Plaza. They need a committed date and a cost ceiling. | The first available tech's EPA cert has expired. There is a look-alike site called Riverside Place. The approval covers standard hours only. |
+| 2 | Mercantile Exchange Center: RTU-2 shut down on vibration at Harbor Point Tower. The owner won't pay overtime. | The obvious tech is only free on an overtime slot. The old part price is cheaper than the current one. |
+| 3 | Alder & Main Retail: RTU-4 lost cooling at Alder Street Gallery. Get the right valve out fast. | The valve in the old bulletin is all quarantined stock. The current bulletin names an approved alternate. |
+| 4 | Crestline Foods: compressor down on the Dock B unit. Do not touch Dock C. | The Dock C work order looks bookable. One tech has an expired cert, another has a blackout that day. |
+| 5 | Granite View Partners: firm quote for an AHU-1 bearing failure. "We got burned by an old rate sheet once." | Both the old part price and the old labor rate are cheaper than the current ones. |
+| 6 | Lakeside Grocers store #4: quote a replacement controller. Corporate prefers OEM. | The OEM part blows through the customer's $700 approval cap. The reman part is the one that clears it. |
+| 7 | Summit Wellness: no-heat quote for RTU-12. Someone ballparked two hours. | The current bulletin raised the job to 4.5 hours because it now requires gas-train recertification. |
+| 8 | Parkview Medical Plaza: reserve desiccant wheel seals for AHU-3. "We have five kits on the shelf." | Five on hand, but one is already reserved and two are quarantined. Only two are usable. |
+| 9 | Harbor Lights Hotel: "Pretty sure it takes a VALVE-2201." Reserve one. | The unit's serial number is in the range where that valve is not compatible. The bulletin says which one is. |
+| 10 | Foundry District Lofts HOA: stage filters for the quarterly PM. Last time too few were reserved. | The PM standard doubled the filter count. Reserved and quarantined stock leave exactly enough. |
 
-```bash
-PY=/opt/homebrew/bin/python3.12        # any python >= 3.10 works
-$PY oracle.py  --task FSB-01 --workdir runs/FSB-01     # single oracle run
-$PY qualify.py --workdir runs                          # full gate (10 tasks)
-$PY harbor/build_harbor.py                             # regen Harbor task dirs
-harbor run -p harbor/task-fsb-01 -a oracle             # Harbor oracle run
-```
+Requests 1 to 4 end in a booked visit. Requests 5 to 7 end in a submitted
+quote. Requests 8 to 10 end in a parts reservation.
 
-Manual server for poking around:
+## How it's graded
+
+The grader is a script, not a person and not another AI. It looks at what the
+agent did and scores six things:
+
+| Points | What it checks |
+|---|---|
+| 20 | Did the agent look up the records it needed before it acted? |
+| 10 | Did every action go through, with nothing rejected by the system? |
+| 25 | Is the company's data in the right end state: right tech, right date, right part, right quantity, right total? |
+| 15 | Did it leave everything else alone? No stray bookings, drafts, or edits. |
+| 10 | Did it check its work after acting? |
+| 20 | Did it report back the right details? |
+
+100 is a pass. Anything less is a fail. A booking with the wrong tech is still a
+wrong booking.
+
+To make sure the grader is fair, the package includes the correct answer for
+every request and six deliberately wrong ways of handling each one. The correct
+answer scores 100 on all ten. The wrong ways all score less:
+
+| Wrong approach | Score |
+|---|---|
+| Do nothing | 25 |
+| Guess the answer without looking anything up | 28 to 39 |
+| Aim the booking, quote, or reservation at the wrong work order or part | 40 to 77 |
+| Do everything except the actual booking, quote, or reservation | 65 |
+| Do the right thing and report correctly, but skip all the lookups | 70 |
+| Read the old bulletin and old prices instead of the current ones | 80 to 97 |
+
+## Running it
+
+You need Python 3.10 or newer. There is nothing to install.
+
+Check that everything works. This runs all ten requests with the correct answer
+and the six wrong approaches, and takes a few minutes:
 
 ```bash
-$PY seed.py /tmp/world.db
-$PY server.py --db /tmp/world.db --trace /tmp/trace.jsonl --port 8377 &
+python3 qualify.py --workdir runs
+```
+
+Run the correct answer for one request and see its scorecard:
+
+```bash
+python3 oracle.py --task FSB-01 --workdir runs/FSB-01
+```
+
+Start the company's systems so your own agent can talk to them:
+
+```bash
+python3 seed.py world.db
+python3 server.py --db world.db --trace trace.jsonl --port 8377
+```
+
+Your agent then sends requests to `http://127.0.0.1:8377/call`. Each request
+names a tool and gives its details, and gets a JSON answer back. For example,
+to check stock on a part:
+
+```bash
 curl -X POST http://127.0.0.1:8377/call -H 'Content-Type: application/json' \
   -d '{"tool":"query_parts","args":{"part_no":"P-3001"}}'
 ```
 
-## Clean-room notes — deliberately different from Blobfish
+There are 25 tools. Eighteen look things up: customers, sites, units, techs,
+work orders, parts and stock, the price book, approvals, schedules, the inbox,
+documents and bulletins, and quotes. Seven change things: move a work order
+along, reserve parts, book a tech, create or update a quote, draft an email,
+and submit the final answer.
 
-All code here is original; Blobfish reports were read for *pattern shape*
-only. Concrete design choices of our own:
+The systems enforce the same rules a real dispatch system would. They will
+refuse to book a tech whose cert has lapsed, double-book a slot, reserve more
+than is actually available, or quote past an approval cap. They will not stop
+the agent from making a choice that is allowed but wrong.
 
-- **Domain**: commercial HVAC field service — a domain Blobfish does not cover.
-- **Transport**: single `/call` JSON endpoint over stdlib `http.server`
-  (not MCP/JSON-RPC framing); trace is written by the server itself.
-- **IDs**: human-readable text PKs (`WO-5001`, `BK-0001`) so allow-lists and
-  assertions are readable; generated ids come from a `counters` table.
-- **Matching**: evidence gating by *exact args*; readback by *semantic
-  containment* of the mutated id in a later read response.
-- **World sharing**: all 10 task clusters coexist in one seeded world;
-  per-task isolation is enforced by the containment allow-list instead of
-  per-task databases.
-- **Server-side pricing**: `create_quote` computes totals from the *current*
-  price book at write time, so even a malicious write cannot quote off a
-  superseded revision — revision discipline is checked in the *answer*.
-- **Release**: Apache-2.0 (see `LICENSE`), plus `release_manifest.sha256`.
+Every call the agent makes is logged to a trace file. The grader reads that log
+and the final state of the database.
+
+## What's in the folder
+
+| File | What it is |
+|---|---|
+| `schema.sql` | The layout of the company's records: 15 tables. |
+| `seed.py` | Builds a fresh copy of the company, identical every time. |
+| `tasks.py` | The ten requests, the traps, the correct answers, and what the grader checks. |
+| `server.py` | The company's systems: the 25 tools and the business rules. |
+| `runner.py` | Builds the company, starts the systems, runs a list of actions, saves the results. |
+| `oracle.py` | Runs the correct answer for one request and prints the score. |
+| `verify.py` | The grader. |
+| `controls.py` | The six deliberately wrong approaches, used to prove the grader can't be fooled. |
+| `qualify.py` | Runs everything and reports whether the whole package checks out. |
+| `release.py` | Writes a checksum list of every file. |
+| `harbor/` | Packaging for two of the requests in the Harbor container format. See the limits below. |
+| `FINAL-RUN.md` | The output from the last full check. |
+
+Everything in the company is fictional. Names, addresses, and email domains are
+made up. The calendar is frozen at March 2, 2026, so results never change with
+the date you run it.
+
+## Known limits
+
+- **No AI agent has been scored on it yet.** Only the built-in correct answer
+  and the deliberately wrong approaches have been run. There are no numbers yet
+  on how hard these requests are for a real agent.
+- **The Harbor packages only run the built-in correct answer.** They are not yet
+  set up for an outside agent to attempt the task, and they ship with the answer
+  key inside the container. Don't use them to score anything yet.
+- **The grader is strict about how the agent looks things up.** It expects
+  specific lookups with specific details. An agent that reaches the right answer
+  by a different route can lose points on the first line of the scorecard.
+- **One stray action costs a lot.** Any action the system rejects, or any extra
+  change such as drafting an email, takes 25 to 35 points off. The requests
+  don't warn the agent about this.
+
+## License
+
+Apache 2.0. See `LICENSE`.

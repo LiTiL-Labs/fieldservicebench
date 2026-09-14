@@ -7,7 +7,7 @@ version = "1.0.0"
 description = "Granite View Partners wants a firm quote for the AHU-1 bearing failure at Granite View Offices — they were burned once by a quote built on an old rate sheet"
 keywords = ["field-service", "sqlite", "tool-use", "deterministic-verifier"]
 [[task.authors]]
-name = "FieldServiceBench clean-room"
+name = "FieldServiceBench"
 
 [metadata]
 

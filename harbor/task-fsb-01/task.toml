@@ -7,7 +7,7 @@ version = "1.0.0"
 description = "Dana Ortiz at Blue Harbor Properties just emailed — rooftop unit RTU-7 at Riverside Plaza is down"
 keywords = ["field-service", "sqlite", "tool-use", "deterministic-verifier"]
 [[task.authors]]
-name = "FieldServiceBench clean-room"
+name = "FieldServiceBench"
 
 [metadata]
 

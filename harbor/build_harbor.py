@@ -26,7 +26,7 @@ version = "1.0.0"
 description = "{desc}"
 keywords = ["field-service", "sqlite", "tool-use", "deterministic-verifier"]
 [[task.authors]]
-name = "FieldServiceBench clean-room"
+name = "FieldServiceBench"
 
 [metadata]
 

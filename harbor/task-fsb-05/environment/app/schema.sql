@@ -1,4 +1,4 @@
--- FieldServiceBench-10 world schema (clean-room, stdlib SQLite).
+-- FieldServiceBench-10 world schema (stdlib SQLite).
 -- Fixed simulation clock lives in config('now'). All ids are TEXT for
 -- stable, human-readable allow-lists and containment diffs.
 

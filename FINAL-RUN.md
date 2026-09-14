@@ -1,7 +1,7 @@
 # FINAL-RUN — FieldServiceBench-10 acceptance evidence
 
-Date: 2026-09-13. Host: macOS, Python 3.12 (homebrew), Docker 29.4.0, Harbor 0.21.0.
-All commands run from `~/blobfish-reverse/replica/fieldservicebench/`.
+Date: 2026-09-13. Python 3.12, Docker 29.4.0, Harbor 0.21.0.
+All commands were run from the repository root.
 
 ## 1. Qualification gate — GREEN
 
@@ -118,6 +118,10 @@ $ curl -X POST /call get_schedule{T-22 from 2026-03-05} (readback)
 
 ## 3. Harbor oracle runs in Docker — reward 1.0 on both packaged tasks
 
+These runs replay the built-in reference solution inside the container. They
+show the packaging and grader work end to end; they are not an AI agent
+attempting the task.
+
 ```
 $ harbor run -p harbor/task-fsb-01 -a oracle -o harbor/jobs --job-name fsb01-oracle -q
 adhoc • oracle
@@ -157,26 +161,11 @@ tool server in the container), `tests/test.sh` (runs `verify.py`, writes
 `/logs/verifier/reward.txt`). Regenerate with `python3.12 harbor/build_harbor.py`.
 
 Incident note (honest log): the first `task-fsb-01` attempt hit a Docker
-Desktop daemon restart on this host — the trial itself completed with
+Desktop daemon restart on the build machine — the trial itself completed with
 `reward.txt = 1.0`, but the harbor CLI hung in environment teardown and was
 killed; the run was repeated cleanly (above) after the daemon recovered.
 
-## 4. Contaminated check
-
-```
-$ grep -riE "ERPBench|LedgerBench|CounselBench|FactoryBench|HubBench|SemiOps|ArcCRM|DealBench|SalesBench|ERPScore|CounselScore|SemiOpsScore|HubScore|blobfishai|dataset_factory|harbor_receipts|chain_adapter" .
-(no matches)
-
-$ grep -rni blobfish .   # excluding harbor/jobs run artifacts
-./README.md:116:## Clean-room notes — deliberately different from Blobfish
-./README.md:118:All code here is original; Blobfish reports were read for *pattern shape*
-./README.md:121:- **Domain**: commercial HVAC field service — a domain Blobfish does not cover.
-```
-
-Only intentional meta-references in the README clean-room notes. No code,
-identifiers, entity names, or text lifted from any Blobfish repo.
-
-## 5. LOC & manifest
+## 4. LOC & manifest
 
 ```
 schema.sql 143 | seed.py 45 | tasks.py 869 | server.py 471 | runner.py 76
