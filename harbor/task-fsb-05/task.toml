@@ -1,0 +1,31 @@
+schema_version = "1.4"
+artifacts = []
+
+[task]
+name = "fieldservicebench/fsb-05"
+version = "1.0.0"
+description = "Granite View Partners wants a firm quote for the AHU-1 bearing failure at Granite View Offices — they were burned once by a quote built on an old rate sheet"
+keywords = ["field-service", "sqlite", "tool-use", "deterministic-verifier"]
+[[task.authors]]
+name = "FieldServiceBench clean-room"
+
+[metadata]
+
+[verifier]
+timeout_sec = 600.0
+collect = []
+
+[verifier.env]
+
+[agent]
+timeout_sec = 600.0
+
+[environment]
+network_mode = "public"
+build_timeout_sec = 600.0
+os = "linux"
+mcp_servers = []
+
+[environment.env]
+
+[solution.env]

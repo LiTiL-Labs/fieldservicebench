@@ -1,0 +1,6 @@
+# Run artifacts (same set release.py excludes from release_manifest.sha256)
+runs/
+harbor/jobs/
+__pycache__/
+*.pyc
+.DS_Store

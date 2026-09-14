@@ -1,0 +1,31 @@
+schema_version = "1.4"
+artifacts = []
+
+[task]
+name = "fieldservicebench/fsb-01"
+version = "1.0.0"
+description = "Dana Ortiz at Blue Harbor Properties just emailed — rooftop unit RTU-7 at Riverside Plaza is down"
+keywords = ["field-service", "sqlite", "tool-use", "deterministic-verifier"]
+[[task.authors]]
+name = "FieldServiceBench clean-room"
+
+[metadata]
+
+[verifier]
+timeout_sec = 600.0
+collect = []
+
+[verifier.env]
+
+[agent]
+timeout_sec = 600.0
+
+[environment]
+network_mode = "public"
+build_timeout_sec = 600.0
+os = "linux"
+mcp_servers = []
+
+[environment.env]
+
+[solution.env]
